@@ -1,0 +1,6 @@
+@Car4rentpg_HostAddress = http://localhost:5167
+
+GET {{Car4rentpg_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###
