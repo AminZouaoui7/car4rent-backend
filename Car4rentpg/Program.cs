@@ -91,6 +91,7 @@ builder.Services.AddHttpContextAccessor();
 builder.Services.AddCors(options =>
 {
     options.AddPolicy("AllowFrontend", policy =>
+    {
         policy
             .WithOrigins(
                 "http://localhost:5173",
@@ -99,10 +100,12 @@ builder.Services.AddCors(options =>
                 "http://localhost:5176",
                 "http://localhost:3000",
                 "http://localhost:4173",
-                "https://car-rent-pearl-two.vercel.app"
+                "https://car-rent-pearl-two.vercel.app",
+                "https://car4rent-admin.vercel.app"
             )
             .AllowAnyHeader()
-            .AllowAnyMethod());
+            .AllowAnyMethod();
+    });
 });
 
 // ── Rate Limiting ──────────────────────────────────────────────────────────
