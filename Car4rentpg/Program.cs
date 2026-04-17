@@ -168,6 +168,34 @@ builder.Services.AddAuthorization();
 var app = builder.Build();
 // ════════════════════════════════════════════════════════════════════════════
 
+// ── Global exception logger (temporaire pour debug) ───────────────────────
+app.Use(async (context, next) =>
+{
+    try
+    {
+        await next();
+    }
+    catch (Exception ex)
+    {
+        Console.WriteLine("🔥🔥🔥 UNHANDLED EXCEPTION 🔥🔥🔥");
+        Console.WriteLine($"Path: {context.Request.Method} {context.Request.Path}");
+        Console.WriteLine(ex.ToString());
+
+        if (!context.Response.HasStarted)
+        {
+            context.Response.StatusCode = 500;
+            context.Response.ContentType = "application/json";
+
+            await context.Response.WriteAsJsonAsync(new
+            {
+                message = ex.Message,
+                detail = ex.InnerException?.Message,
+                path = context.Request.Path.Value
+            });
+        }
+    }
+});
+
 // ── Dev errors ─────────────────────────────────────────────────────────────
 if (app.Environment.IsDevelopment())
 {
