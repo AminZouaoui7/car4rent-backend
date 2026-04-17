@@ -99,8 +99,7 @@ builder.Services.AddCors(options =>
                 "http://localhost:5176",
                 "http://localhost:3000",
                 "http://localhost:4173",
-                "https://car-rent-git-main-aminmimou963-1611s-projects.vercel.app",
-                "https://car-rent-cldwgzte7-aminmimou963-1611s-projects.vercel.app"
+                "https://car-rent-pearl-two.vercel.app"
             )
             .AllowAnyHeader()
             .AllowAnyMethod());
