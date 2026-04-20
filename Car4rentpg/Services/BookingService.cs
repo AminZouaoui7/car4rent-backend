@@ -239,12 +239,21 @@
                     UpdatedAt = DateTime.UtcNow
                 };
 
-                _context.Bookings.Add(booking);
-                _context.Payments.Add(depositPayment);
+            _context.Bookings.Add(booking);
+            _context.Payments.Add(depositPayment);
 
+            try
+            {
                 await _context.SaveChangesAsync();
+            }
+            catch (Exception ex)
+            {
+                throw new Exception(
+                    $"Erreur SaveChangesAsync: {ex.InnerException?.Message ?? ex.Message}"
+                );
+            }
 
-                await _emailService.SendBookingPendingEmailAsync(
+            await _emailService.SendBookingPendingEmailAsync(
                     booking.Email,
                     $"{booking.FirstName} {booking.LastName}",
                     $"{vehicle.Brand} {vehicle.Model}",
