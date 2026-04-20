@@ -8,17 +8,23 @@ namespace Car4rentpg.Services
     {
         private readonly HttpClient _httpClient;
         private readonly CaptchaSettings _settings;
+        private readonly ILogger<CaptchaService> _logger;
 
-        public CaptchaService(HttpClient httpClient, IOptions<CaptchaSettings> options)
+        public CaptchaService(
+            HttpClient httpClient,
+            IOptions<CaptchaSettings> options,
+            ILogger<CaptchaService> logger)
         {
             _httpClient = httpClient;
             _settings = options.Value;
+            _logger = logger;
         }
 
         public async Task<CaptchaVerificationResult> VerifyAsync(string? token)
         {
             if (string.IsNullOrWhiteSpace(token))
             {
+                _logger.LogWarning("Captcha token is missing.");
                 return new CaptchaVerificationResult
                 {
                     Success = false,
@@ -28,6 +34,7 @@ namespace Car4rentpg.Services
 
             if (string.IsNullOrWhiteSpace(_settings.SecretKey))
             {
+                _logger.LogError("Captcha secret key is not configured.");
                 return new CaptchaVerificationResult
                 {
                     Success = false,
@@ -42,18 +49,23 @@ namespace Car4rentpg.Services
             };
 
             using var content = new FormUrlEncodedContent(form);
-            using var response = await _httpClient.PostAsync("https://challenges.cloudflare.com/turnstile/v0/siteverify", content);
+            using var response = await _httpClient.PostAsync(
+                "https://challenges.cloudflare.com/turnstile/v0/siteverify",
+                content);
+
+            var json = await response.Content.ReadAsStringAsync();
+
+            _logger.LogInformation("Turnstile raw response: {Response}", json);
 
             if (!response.IsSuccessStatusCode)
             {
+                _logger.LogError("Captcha verification request failed with status code {StatusCode}", response.StatusCode);
                 return new CaptchaVerificationResult
                 {
                     Success = false,
                     ErrorMessage = "Captcha verification request failed."
                 };
             }
-
-            var json = await response.Content.ReadAsStringAsync();
 
             using var doc = JsonDocument.Parse(json);
             var root = doc.RootElement;
@@ -64,13 +76,20 @@ namespace Car4rentpg.Services
             {
                 string? errorMessage = null;
 
-                if (root.TryGetProperty("error-codes", out var errorsProp) && errorsProp.ValueKind == JsonValueKind.Array)
+                if (root.TryGetProperty("error-codes", out var errorsProp) &&
+                    errorsProp.ValueKind == JsonValueKind.Array)
                 {
                     var errors = errorsProp.EnumerateArray()
                         .Select(x => x.GetString())
-                        .Where(x => !string.IsNullOrWhiteSpace(x));
+                        .Where(x => !string.IsNullOrWhiteSpace(x))
+                        .ToList();
 
                     errorMessage = string.Join(", ", errors!);
+                    _logger.LogWarning("Turnstile verification failed. Error codes: {ErrorCodes}", errorMessage);
+                }
+                else
+                {
+                    _logger.LogWarning("Turnstile verification failed without explicit error-codes.");
                 }
 
                 return new CaptchaVerificationResult
@@ -80,6 +99,7 @@ namespace Car4rentpg.Services
                 };
             }
 
+            _logger.LogInformation("Turnstile verification succeeded.");
             return new CaptchaVerificationResult
             {
                 Success = true

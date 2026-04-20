@@ -664,15 +664,15 @@
                     .FirstOrDefaultAsync(b => b.Id == id);
             }
 
-            private async Task ValidateCaptchaAsync(string? captchaToken)
-            {
-                var captchaResult = await _captchaService.VerifyAsync(captchaToken);
+        private async Task ValidateCaptchaAsync(string? captchaToken)
+        {
+            var captchaResult = await _captchaService.VerifyAsync(captchaToken);
 
-                if (!captchaResult.Success)
-                    throw new Exception("Captcha invalide. Veuillez réessayer.");
-            }
+            if (!captchaResult.Success)
+                throw new Exception($"Captcha invalide. Veuillez réessayer. Détail: {captchaResult.ErrorMessage}");
+        }
 
-            private async Task CheckBookingAbuseAsync(CreateBookingDto dto)
+        private async Task CheckBookingAbuseAsync(CreateBookingDto dto)
             {
                 var normalizedEmail = dto.Email.Trim().ToLowerInvariant();
                 var now = DateTime.UtcNow;
