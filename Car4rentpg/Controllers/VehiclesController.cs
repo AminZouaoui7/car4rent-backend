@@ -66,10 +66,10 @@ namespace Car4rentpg.Controllers
 
         [HttpGet("available")]
         public async Task<IActionResult> GetAvailable(
-    [FromQuery] DateTime startDate,
-    [FromQuery] DateTime endDate,
-    [FromQuery] string? pricingMode,
-    [FromQuery] int durationMonths = 1)
+            [FromQuery] DateTime startDate,
+            [FromQuery] DateTime endDate,
+            [FromQuery] string? pricingMode,
+            [FromQuery] int durationMonths = 1)
         {
             try
             {
@@ -87,6 +87,7 @@ namespace Car4rentpg.Controllers
                 if (totalDays < 2)
                     return BadRequest(new { message = "Minimum booking duration is 2 days." });
 
+                // PUBLIC SEARCH => uniquement les voitures disponibles
                 var vehicles = await _context.Vehicles
                     .Include(v => v.Category)
                     .Where(v => v.Available)
@@ -125,18 +126,14 @@ namespace Car4rentpg.Controllers
                                 Model = vehicle.Model,
                                 Slug = vehicle.Slug,
                                 BasePriceDay = Math.Round(vehicle.BasePriceDay, 2),
-
                                 AppliedPricePerDay = Math.Round(pricingLongTerm.AveragePricePerDay, 2),
                                 TotalPrice = Math.Round(pricingLongTerm.TotalPrice, 2),
-
                                 DisplayMonthlyPrice = monthlyPriceFromRule,
                                 DisplayTotalPrice = totalLongTermPriceFromRule,
-
                                 AppliedRule = pricingLongTerm.AppliedRule,
                                 AppliedSeason = pricingLongTerm.AppliedSeason,
                                 HasPricingRule = pricingLongTerm.HasPricingRule,
                                 PricingSource = "PRICING_RULE",
-
                                 Gearbox = vehicle.Gearbox,
                                 Fuel = vehicle.Fuel,
                                 Seats = vehicle.Seats,
@@ -182,18 +179,14 @@ namespace Car4rentpg.Controllers
                                 Model = vehicle.Model,
                                 Slug = vehicle.Slug,
                                 BasePriceDay = Math.Round(vehicle.BasePriceDay, 2),
-
                                 AppliedPricePerDay = Math.Round(monthlyPriceFromTariff / 30, 2),
                                 TotalPrice = totalLongTermPriceFromTariff,
-
                                 DisplayMonthlyPrice = monthlyPriceFromTariff,
                                 DisplayTotalPrice = totalLongTermPriceFromTariff,
-
                                 AppliedRule = null,
                                 AppliedSeason = currentSeason != null ? "Saison" : "Hors saison",
                                 HasPricingRule = false,
                                 PricingSource = "TARIFF",
-
                                 Gearbox = vehicle.Gearbox,
                                 Fuel = vehicle.Fuel,
                                 Seats = vehicle.Seats,
@@ -222,18 +215,14 @@ namespace Car4rentpg.Controllers
                             Model = vehicle.Model,
                             Slug = vehicle.Slug,
                             BasePriceDay = Math.Round(vehicle.BasePriceDay, 2),
-
                             AppliedPricePerDay = Math.Round(pricingFallback.AveragePricePerDay, 2),
                             TotalPrice = fallbackTotalPrice,
-
                             DisplayMonthlyPrice = fallbackMonthlyPrice,
                             DisplayTotalPrice = fallbackTotalPrice,
-
                             AppliedRule = null,
                             AppliedSeason = currentSeason != null ? "Saison" : "Hors saison",
                             HasPricingRule = false,
                             PricingSource = "BASE_PRICE",
-
                             Gearbox = vehicle.Gearbox,
                             Fuel = vehicle.Fuel,
                             Seats = vehicle.Seats,
@@ -315,6 +304,7 @@ namespace Car4rentpg.Controllers
                 var isSeasonNow = currentSeason != null;
                 var activeType = isSeasonNow ? "SEASON" : "OFF_SEASON";
 
+                // PUBLIC TARIFS => seulement les voitures disponibles
                 var vehicles = await _context.Vehicles
                     .AsNoTracking()
                     .Include(v => v.Category)
@@ -441,9 +431,10 @@ namespace Car4rentpg.Controllers
             }
         }
 
+        // PUBLIC => seulement les voitures disponibles
         [AllowAnonymous]
         [HttpGet]
-        public async Task<IActionResult> GetAll()
+        public async Task<IActionResult> GetAllPublic()
         {
             try
             {
@@ -477,6 +468,78 @@ namespace Car4rentpg.Controllers
                     .ToListAsync();
 
                 return Ok(vehicles);
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { message = ex.Message });
+            }
+        }
+
+        // ADMIN => toutes les voitures, même désactivées
+        [Authorize(Roles = "Admin")]
+        [HttpGet("admin/all")]
+        public async Task<IActionResult> GetAllForAdmin()
+        {
+            try
+            {
+                var vehicles = await _context.Vehicles
+                    .AsNoTracking()
+                    .Include(v => v.Category)
+                    .OrderBy(v => v.Brand)
+                    .ThenBy(v => v.Model)
+                    .Select(v => new
+                    {
+                        v.Id,
+                        v.Brand,
+                        v.Model,
+                        v.Slug,
+                        v.BasePriceDay,
+                        v.Gearbox,
+                        v.Fuel,
+                        v.Seats,
+                        v.Bags,
+                        v.Image,
+                        v.Available,
+                        Category = v.Category == null
+                            ? null
+                            : new
+                            {
+                                v.Category.Id,
+                                v.Category.Name
+                            }
+                    })
+                    .ToListAsync();
+
+                return Ok(vehicles);
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { message = ex.Message });
+            }
+        }
+
+        // ADMIN DASHBOARD STATS
+        [Authorize(Roles = "Admin")]
+        [HttpGet("admin/stats")]
+        public async Task<IActionResult> GetAdminStats()
+        {
+            try
+            {
+                var total = await _context.Vehicles.CountAsync();
+                var available = await _context.Vehicles.CountAsync(v => v.Available);
+                var unavailable = await _context.Vehicles.CountAsync(v => !v.Available);
+
+                var avgPrice = await _context.Vehicles.AnyAsync()
+                    ? await _context.Vehicles.AverageAsync(v => v.BasePriceDay)
+                    : 0;
+
+                return Ok(new
+                {
+                    total,
+                    available,
+                    unavailable,
+                    averagePricePerDay = Math.Round(avgPrice, 2)
+                });
             }
             catch (Exception ex)
             {
@@ -627,7 +690,6 @@ namespace Car4rentpg.Controllers
                 vehicle.Image = dto.Image?.Trim();
                 vehicle.CategoryId = dto.CategoryId;
                 vehicle.UpdatedAt = DateTime.UtcNow;
-
                 vehicle.Slug = await GenerateUniqueSlugAsync(dto.Brand, dto.Model, vehicle.Id);
 
                 await _context.SaveChangesAsync();
@@ -742,30 +804,29 @@ namespace Car4rentpg.Controllers
             }
         }
 
-
         [HttpGet("debug-tariffs")]
-public async Task<IActionResult> DebugTariffs()
-{
-    var tariffs = await _context.TariffSettings
-        .AsNoTracking()
-        .OrderBy(t => t.VehicleId)
-        .ThenBy(t => t.Type)
-        .Select(t => new
+        public async Task<IActionResult> DebugTariffs()
         {
-            t.Id,
-            t.VehicleId,
-            t.Type,
-            t.PriceStart,
-            t.Price3Days,
-            t.Price4To6Days,
-            t.Price7To15Days,
-            t.Price16To29Days,
-            t.Price1Month
-        })
-        .ToListAsync();
+            var tariffs = await _context.TariffSettings
+                .AsNoTracking()
+                .OrderBy(t => t.VehicleId)
+                .ThenBy(t => t.Type)
+                .Select(t => new
+                {
+                    t.Id,
+                    t.VehicleId,
+                    t.Type,
+                    t.PriceStart,
+                    t.Price3Days,
+                    t.Price4To6Days,
+                    t.Price7To15Days,
+                    t.Price16To29Days,
+                    t.Price1Month
+                })
+                .ToListAsync();
 
-    return Ok(tariffs);
-}
+            return Ok(tariffs);
+        }
 
         [AllowAnonymous]
         [HttpGet("special-offers")]
