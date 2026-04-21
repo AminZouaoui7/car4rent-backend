@@ -69,11 +69,14 @@ namespace Car4rentpg.Services
                 PickupCityId = dto.PickupCityId,
                 VehicleId = string.IsNullOrWhiteSpace(dto.VehicleId) ? null : dto.VehicleId,
                 Notes = string.IsNullOrWhiteSpace(dto.Notes) ? null : dto.Notes.Trim(),
-                Status = (pricingResult.ProposedMonthlyPrice.HasValue || pricingResult.ProposedTotalPrice.HasValue)
-                    ? "Quoted"
-                    : "Pending",
+
+                // Toujours "Pending" à la création
+                Status = "Pending",
+
+                // On peut pré-calculer un prix sans considérer que le devis est envoyé
                 ProposedMonthlyPrice = pricingResult.ProposedMonthlyPrice,
                 ProposedTotalPrice = pricingResult.ProposedTotalPrice,
+
                 IsQuoteSent = false,
                 CreatedAt = DateTime.UtcNow
             };
