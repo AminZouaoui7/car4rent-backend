@@ -145,36 +145,49 @@ namespace Car4rentpg.Services
 
             await _context.SaveChangesAsync();
 
+            // IMPORTANT : on recharge depuis la base pour être sûr d’avoir
+            // les dernières valeurs du devis avant envoi du mail
+            var freshRequest = await _context.LongTermRentalRequests
+                .Include(x => x.PickupCity)
+                .Include(x => x.Vehicle)
+                    .ThenInclude(v => v!.Category)
+                .FirstOrDefaultAsync(x => x.Id == id);
+
+            if (freshRequest == null)
+            {
+                throw new Exception("Demande introuvable après mise à jour.");
+            }
+
             if (dto.Status == "Approved")
             {
                 await _emailService.SendLongTermRentalApprovedEmailAsync(
-                    request.Email,
-                    $"{request.FirstName} {request.LastName}",
-                    request.StartDate,
-                    request.DurationMonths,
-                    request.PickupCity?.Name ?? "Non renseignée",
-                    request.Vehicle != null
-                        ? $"{request.Vehicle.Brand} {request.Vehicle.Model}"
+                    freshRequest.Email,
+                    $"{freshRequest.FirstName} {freshRequest.LastName}",
+                    freshRequest.StartDate,
+                    freshRequest.DurationMonths,
+                    freshRequest.PickupCity?.Name ?? "Non renseignée",
+                    freshRequest.Vehicle != null
+                        ? $"{freshRequest.Vehicle.Brand} {freshRequest.Vehicle.Model}"
                         : null,
-                    request.ProposedMonthlyPrice,
-                    request.ProposedTotalPrice
+                    freshRequest.ProposedMonthlyPrice,
+                    freshRequest.ProposedTotalPrice
                 );
             }
             else if (dto.Status == "Rejected")
             {
                 await _emailService.SendLongTermRentalRejectedEmailAsync(
-                    request.Email,
-                    $"{request.FirstName} {request.LastName}",
-                    request.StartDate,
-                    request.DurationMonths,
-                    request.PickupCity?.Name ?? "Non renseignée",
-                    request.Vehicle != null
-                        ? $"{request.Vehicle.Brand} {request.Vehicle.Model}"
+                    freshRequest.Email,
+                    $"{freshRequest.FirstName} {freshRequest.LastName}",
+                    freshRequest.StartDate,
+                    freshRequest.DurationMonths,
+                    freshRequest.PickupCity?.Name ?? "Non renseignée",
+                    freshRequest.Vehicle != null
+                        ? $"{freshRequest.Vehicle.Brand} {freshRequest.Vehicle.Model}"
                         : null
                 );
             }
 
-            return request;
+            return freshRequest;
         }
 
         public async Task<LongTermRentalRequest> UpdateQuoteAsync(string id, UpdateLongTermRentalQuoteDto dto)
@@ -190,36 +203,56 @@ namespace Car4rentpg.Services
                 throw new Exception("Demande introuvable.");
             }
 
-            request.ProposedMonthlyPrice = dto.ProposedMonthlyPrice;
-            request.ProposedTotalPrice = dto.ProposedTotalPrice;
+            // On met à jour uniquement les champs fournis
+            if (dto.ProposedMonthlyPrice.HasValue)
+            {
+                request.ProposedMonthlyPrice = dto.ProposedMonthlyPrice.Value;
+            }
+
+            if (dto.ProposedTotalPrice.HasValue)
+            {
+                request.ProposedTotalPrice = dto.ProposedTotalPrice.Value;
+            }
+
             request.IsQuoteSent = dto.IsQuoteSent;
 
-            if (dto.ProposedMonthlyPrice.HasValue || dto.ProposedTotalPrice.HasValue)
+            if (request.ProposedMonthlyPrice.HasValue || request.ProposedTotalPrice.HasValue)
             {
                 request.Status = "Quoted";
             }
 
             await _context.SaveChangesAsync();
 
+            // Recharge après sauvegarde pour garantir les valeurs les plus récentes
+            var freshRequest = await _context.LongTermRentalRequests
+                .Include(x => x.PickupCity)
+                .Include(x => x.Vehicle)
+                    .ThenInclude(v => v!.Category)
+                .FirstOrDefaultAsync(x => x.Id == id);
+
+            if (freshRequest == null)
+            {
+                throw new Exception("Demande introuvable après mise à jour.");
+            }
+
             if (dto.IsQuoteSent)
             {
                 await _emailService.SendLongTermRentalQuoteEmailAsync(
-                    request.Email,
-                    $"{request.FirstName} {request.LastName}",
-                    request.StartDate,
-                    request.DurationMonths,
-                    request.PickupCity?.Name ?? "Non renseignée",
-                    request.Vehicle != null
-                        ? $"{request.Vehicle.Brand} {request.Vehicle.Model}"
+                    freshRequest.Email,
+                    $"{freshRequest.FirstName} {freshRequest.LastName}",
+                    freshRequest.StartDate,
+                    freshRequest.DurationMonths,
+                    freshRequest.PickupCity?.Name ?? "Non renseignée",
+                    freshRequest.Vehicle != null
+                        ? $"{freshRequest.Vehicle.Brand} {freshRequest.Vehicle.Model}"
                         : null,
-                    request.ProposedMonthlyPrice,
-                    request.ProposedTotalPrice
+                    freshRequest.ProposedMonthlyPrice,
+                    freshRequest.ProposedTotalPrice
                 );
             }
 
-            return request;
+            return freshRequest;
         }
-
         public async Task<bool> DeleteAsync(string id)
         {
             var request = await _context.LongTermRentalRequests
