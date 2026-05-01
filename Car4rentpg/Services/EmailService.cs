@@ -32,7 +32,8 @@ namespace Car4rentpg.Services
             return new SmtpClient(smtpHost, int.Parse(smtpPort))
             {
                 Credentials = new NetworkCredential(senderEmail, senderPassword),
-                EnableSsl = true
+                EnableSsl = true,
+                Timeout = 10000
             };
         }
 
