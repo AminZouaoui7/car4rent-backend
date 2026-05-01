@@ -77,9 +77,7 @@
             if (dto.BoosterSeatQuantity < 0 || dto.BabySeatQuantity < 0 || dto.ChildSeatQuantity < 0)
                 throw new Exception("Les quantités des options ne peuvent pas être négatives.");
 
-            var pickupCity = await _context.Cities
-                .FirstOrDefaultAsync(c => c.Id == dto.PickupCityId);
-
+            var pickupCity = await _context.Cities.FirstOrDefaultAsync(c => c.Id == dto.PickupCityId);
             if (pickupCity == null)
                 throw new Exception("Pickup city not found.");
 
@@ -87,58 +85,49 @@
 
             if (!string.IsNullOrWhiteSpace(dto.ReturnCityId))
             {
-                returnCity = await _context.Cities
-                    .FirstOrDefaultAsync(c => c.Id == dto.ReturnCityId);
+                returnCity = await _context.Cities.FirstOrDefaultAsync(c => c.Id == dto.ReturnCityId);
 
                 if (returnCity == null)
                     throw new Exception("Return city not found.");
             }
 
             var pricing = await _pricingService.CalculateAsync(vehicle, startDate, endDate);
-            double basePrice = Math.Round(pricing.TotalPrice, 2);
+            var basePrice = Math.Round(pricing.TotalPrice, 2);
 
-            double secondDriverAmount = dto.HasSecondDriver
-                ? Math.Round(totalDays * SecondDriverPricePerDay, 2)
-                : 0;
+            var secondDriverAmount = dto.HasSecondDriver ? Math.Round(totalDays * SecondDriverPricePerDay, 2) : 0;
+            var gpsAmount = dto.HasGps ? Math.Round(totalDays * GpsPricePerDay, 2) : 0;
+            var fullTankAmount = dto.HasFullTank ? Math.Round(FullTankFlatPrice, 2) : 0;
 
-            double gpsAmount = dto.HasGps
-                ? Math.Round(totalDays * GpsPricePerDay, 2)
-                : 0;
-
-            double fullTankAmount = dto.HasFullTank
-                ? Math.Round(FullTankFlatPrice, 2)
-                : 0;
-
-            double boosterSeatAmount = dto.BoosterSeatQuantity > 0
+            var boosterSeatAmount = dto.BoosterSeatQuantity > 0
                 ? Math.Round(dto.BoosterSeatQuantity * totalDays * BoosterSeatPricePerDay, 2)
                 : 0;
 
-            double babySeatAmount = dto.BabySeatQuantity > 0
+            var babySeatAmount = dto.BabySeatQuantity > 0
                 ? Math.Round(dto.BabySeatQuantity * totalDays * BabySeatPricePerDay, 2)
                 : 0;
 
-            double childSeatAmount = dto.ChildSeatQuantity > 0
+            var childSeatAmount = dto.ChildSeatQuantity > 0
                 ? Math.Round(dto.ChildSeatQuantity * totalDays * ChildSeatPricePerDay, 2)
                 : 0;
 
-            double protectionPlusAmount = dto.HasProtectionPlus
+            var protectionPlusAmount = dto.HasProtectionPlus
                 ? Math.Round(totalDays * ProtectionPlusPricePerDay, 2)
                 : 0;
 
-            double originalPrice = Math.Round(
-                basePrice
-                + secondDriverAmount
-                + gpsAmount
-                + fullTankAmount
-                + boosterSeatAmount
-                + babySeatAmount
-                + childSeatAmount
-                + protectionPlusAmount,
+            var originalPrice = Math.Round(
+                basePrice +
+                secondDriverAmount +
+                gpsAmount +
+                fullTankAmount +
+                boosterSeatAmount +
+                babySeatAmount +
+                childSeatAmount +
+                protectionPlusAmount,
                 2
             );
 
-            double discountAmount = 0;
-            double totalPrice = originalPrice;
+            var discountAmount = 0.0;
+            var totalPrice = originalPrice;
             string? promoCodeUsed = null;
 
             if (!string.IsNullOrWhiteSpace(dto.PromoCode))
@@ -154,7 +143,7 @@
                 promoCodeUsed = promo.Code;
             }
 
-            double depositAmount = Math.Round(totalPrice * 0.10, 2);
+            var depositAmount = Math.Round(totalPrice * 0.10, 2);
             var normalizedEmail = dto.Email.Trim().ToLowerInvariant();
 
             var booking = new Booking
@@ -170,7 +159,7 @@
                 Age = dto.Age,
 
                 PickupCityId = dto.PickupCityId,
-                ReturnCityId = dto.ReturnCityId,
+                ReturnCityId = string.IsNullOrWhiteSpace(dto.ReturnCityId) ? dto.PickupCityId : dto.ReturnCityId,
 
                 VehicleId = dto.VehicleId,
                 TotalDays = totalDays,
@@ -239,27 +228,29 @@
 
             await _context.SaveChangesAsync();
 
-            _ = Task.Run(async () =>
+            try
             {
-                try
-                {
-                    await _emailService.SendBookingPendingEmailAsync(
-                        booking.Email,
-                        $"{booking.FirstName} {booking.LastName}",
-                        $"{vehicle.Brand} {vehicle.Model}",
-                        booking.StartDate,
-                        booking.EndDate,
-                        booking.TotalDays ?? 0,
-                        booking.TotalPrice ?? 0,
-                        pickupCity.Name,
-                        returnCity?.Name ?? pickupCity.Name
-                    );
-                }
-                catch (Exception ex)
-                {
-                    Console.WriteLine($"Email réservation non envoyé: {ex.Message}");
-                }
-            });
+                Console.WriteLine("📧 Début envoi email réservation...");
+
+                await _emailService.SendBookingPendingEmailAsync(
+                    booking.Email,
+                    $"{booking.FirstName} {booking.LastName}",
+                    $"{vehicle.Brand} {vehicle.Model}",
+                    booking.StartDate,
+                    booking.EndDate,
+                    booking.TotalDays ?? 0,
+                    booking.TotalPrice ?? 0,
+                    pickupCity.Name,
+                    returnCity?.Name ?? pickupCity.Name
+                );
+
+                Console.WriteLine("✅ Email réservation envoyé avec succès.");
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine("❌ Email réservation non envoyé:");
+                Console.WriteLine(ex.ToString());
+            }
 
             return booking;
         }
