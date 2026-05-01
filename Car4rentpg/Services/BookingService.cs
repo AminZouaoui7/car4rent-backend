@@ -38,7 +38,7 @@
                 throw new Exception("Booking data is required.");
 
             await ValidateCaptchaAsync(dto.CaptchaToken);
-            await CheckBookingAbuseAsync(dto);
+           // await CheckBookingAbuseAsync(dto);
 
             var startDate = dto.StartDate.Date;
             var endDate = dto.EndDate.Date;

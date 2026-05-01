@@ -20,7 +20,6 @@
         // ===============================
         // CREATE BOOKING
         // ===============================
-        [EnableRateLimiting("public-booking")]
         [HttpPost]
         public async Task<IActionResult> Create([FromBody] CreateBookingDto dto)
         {
