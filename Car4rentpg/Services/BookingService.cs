@@ -247,24 +247,7 @@
                 );
             }
 
-            try
-            {
-                await _emailService.SendBookingPendingEmailAsync(
-                    booking.Email,
-                    $"{booking.FirstName} {booking.LastName}",
-                    $"{vehicle.Brand} {vehicle.Model}",
-                    booking.StartDate,
-                    booking.EndDate,
-                    booking.TotalDays ?? 0,
-                    booking.TotalPrice ?? 0,
-                    pickupCity.Name,
-                    returnCity?.Name ?? pickupCity.Name
-                );
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine($"Email réservation non envoyé: {ex.Message}");
-            }
+          
 
             return booking;
         }

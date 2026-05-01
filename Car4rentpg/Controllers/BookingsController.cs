@@ -20,40 +20,13 @@ namespace Car4rentpg.Controllers
         // ===============================
         // CREATE BOOKING
         // ===============================
-        [EnableRateLimiting("public-booking")]
         [HttpPost]
-        public async Task<IActionResult> Create([FromBody] CreateBookingDto dto)
+        public IActionResult Create([FromBody] CreateBookingDto dto)
         {
-            try
+            return Ok(new
             {
-                if (dto == null)
-                    return BadRequest(new { message = "Booking data is required." });
-
-                dto.StartDate = DateTime.SpecifyKind(dto.StartDate.Date, DateTimeKind.Utc);
-                dto.EndDate = DateTime.SpecifyKind(dto.EndDate.Date, DateTimeKind.Utc);
-
-                var result = await _bookingService.CreateBookingAsync(dto);
-
-                return Ok(new
-                {
-                    id = result.Id,
-                    message = "Réservation créée avec succès.",
-                    totalPrice = result.TotalPrice,
-                    originalPrice = result.OriginalPrice,
-                    discountAmount = result.DiscountAmount,
-                    promoCodeUsed = result.PromoCodeUsed,
-                    depositAmount = result.DepositAmount,
-                    status = result.Status.ToString()
-                });
-            }
-            catch (Exception ex)
-            {
-                return BadRequest(new
-                {
-                    message = ex.Message,
-                    detail = ex.InnerException?.Message
-                });
-            }
+                message = "TEST OK"
+            });
         }
         // ===============================
         // PREVIEW PRICE
