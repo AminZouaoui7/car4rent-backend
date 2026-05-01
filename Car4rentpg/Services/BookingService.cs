@@ -40,7 +40,7 @@
 
             // TEST TEMPORAIRE :
             // On désactive captcha + anti-abus pour vérifier si le blocage vient de là.
-            // await ValidateCaptchaAsync(dto.CaptchaToken);
+            await ValidateCaptchaAsync(dto.CaptchaToken);
             // await CheckBookingAbuseAsync(dto);
 
             var startDate = dto.StartDate.Date;
