@@ -87,17 +87,24 @@ namespace Car4rentpg.Services
             var createdRequest = await GetByIdAsync(request.Id)
                 ?? throw new Exception("Erreur lors de la création de la demande.");
 
-            await _emailService.SendLongTermRentalPendingEmailAsync(
-                createdRequest.Email,
-                $"{createdRequest.FirstName} {createdRequest.LastName}",
-                createdRequest.StartDate,
-                createdRequest.DurationMonths,
-                createdRequest.PickupCity?.Name ?? "Non renseignée",
-                createdRequest.Vehicle != null
-                    ? $"{createdRequest.Vehicle.Brand} {createdRequest.Vehicle.Model}"
-                    : null,
-                createdRequest.Notes
-            );
+            try
+            {
+                await _emailService.SendLongTermRentalPendingEmailAsync(
+                    createdRequest.Email,
+                    $"{createdRequest.FirstName} {createdRequest.LastName}",
+                    createdRequest.StartDate,
+                    createdRequest.DurationMonths,
+                    createdRequest.PickupCity?.Name ?? "Non renseignée",
+                    createdRequest.Vehicle != null
+                        ? $"{createdRequest.Vehicle.Brand} {createdRequest.Vehicle.Model}"
+                        : null,
+                    createdRequest.Notes
+                );
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Email longue durée non envoyé: {ex.Message}");
+            }
 
             return createdRequest;
         }

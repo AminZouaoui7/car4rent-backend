@@ -85,17 +85,24 @@ namespace Car4rentpg.Controllers
             _context.TransferBookings.Add(booking);
             await _context.SaveChangesAsync();
 
-            await _emailService.SendTransferPendingEmailAsync(
-                booking.Email,
-                $"{booking.FirstName} {booking.LastName}",
-                pickupAirport.Name,
-                dropoffCity.Name,
-                booking.HotelName,
-                booking.HotelAddress,
-                booking.TransferDate,
-                booking.Passengers,
-                booking.LuggageCount
-            );
+            try
+            {
+                await _emailService.SendTransferPendingEmailAsync(
+                    booking.Email,
+                    $"{booking.FirstName} {booking.LastName}",
+                    pickupAirport.Name,
+                    dropoffCity.Name,
+                    booking.HotelName,
+                    booking.HotelAddress,
+                    booking.TransferDate,
+                    booking.Passengers,
+                    booking.LuggageCount
+                );
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Email transfert non envoyé: {ex.Message}");
+            }
 
             return Ok(new
             {
