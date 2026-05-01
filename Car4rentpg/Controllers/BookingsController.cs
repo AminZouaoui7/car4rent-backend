@@ -33,17 +33,28 @@ namespace Car4rentpg.Controllers
                 dto.EndDate = DateTime.SpecifyKind(dto.EndDate.Date, DateTimeKind.Utc);
 
                 var result = await _bookingService.CreateBookingAsync(dto);
-                return Ok(result);
+
+                return Ok(new
+                {
+                    id = result.Id,
+                    message = "Réservation créée avec succès.",
+                    totalPrice = result.TotalPrice,
+                    originalPrice = result.OriginalPrice,
+                    discountAmount = result.DiscountAmount,
+                    promoCodeUsed = result.PromoCodeUsed,
+                    depositAmount = result.DepositAmount,
+                    status = result.Status.ToString()
+                });
             }
             catch (Exception ex)
             {
                 return BadRequest(new
                 {
-                    message = ex.Message
+                    message = ex.Message,
+                    detail = ex.InnerException?.Message
                 });
             }
         }
-
         // ===============================
         // PREVIEW PRICE
         // ===============================

@@ -266,15 +266,8 @@
                 Console.WriteLine($"Email réservation non envoyé: {ex.Message}");
             }
 
-            return await _context.Bookings
-                .Include(b => b.Vehicle)
-                    .ThenInclude(v => v.Category)
-                .Include(b => b.PickupCity)
-                .Include(b => b.ReturnCity)
-                .Include(b => b.Payments)
-                .FirstAsync(b => b.Id == booking.Id);
+            return booking;
         }
-
         public async Task<BookingPricePreviewResponseDto> PreviewBookingPriceAsync(BookingPreviewDto dto)
             {
                 if (dto == null)
@@ -397,6 +390,7 @@
             }
 
             public async Task<List<Booking>> GetAllBookingsAsync()
+
             {
                 return await _context.Bookings
                     .Include(b => b.Vehicle)

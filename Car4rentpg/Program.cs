@@ -71,9 +71,15 @@ builder.Services.Configure<CaptchaSettings>(
 );
 
 // ── Http Clients ───────────────────────────────────────────────────────────
-builder.Services.AddHttpClient<KonnectService>();
-builder.Services.AddHttpClient<CaptchaService>();
+builder.Services.AddHttpClient<KonnectService>(client =>
+{
+    client.Timeout = TimeSpan.FromSeconds(15);
+});
 
+builder.Services.AddHttpClient<CaptchaService>(client =>
+{
+    client.Timeout = TimeSpan.FromSeconds(10);
+});
 // ── Services ───────────────────────────────────────────────────────────────
 builder.Services.AddScoped<BookingService>();
 builder.Services.AddScoped<EmailService>();
