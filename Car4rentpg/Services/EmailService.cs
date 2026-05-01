@@ -17,20 +17,23 @@ namespace Car4rentpg.Services
         private SmtpClient CreateSmtpClient()
         {
             var smtpHost = _configuration["EmailSettings:SmtpHost"] ?? "smtp.gmail.com";
-            var smtpPort = _configuration["EmailSettings:SmtpPort"] ?? "587";
+            var smtpPortRaw = _configuration["EmailSettings:SmtpPort"] ?? "587";
             var senderEmail = _configuration["EmailSettings:SenderEmail"];
             var senderPassword = _configuration["EmailSettings:SenderPassword"];
 
             if (string.IsNullOrWhiteSpace(senderEmail) || string.IsNullOrWhiteSpace(senderPassword))
                 throw new Exception("EmailSettings SenderEmail/SenderPassword manquants.");
 
-            return new SmtpClient(smtpHost, int.Parse(smtpPort))
+            if (!int.TryParse(smtpPortRaw, out var smtpPort))
+                smtpPort = 587;
+
+            return new SmtpClient(smtpHost, smtpPort)
             {
                 UseDefaultCredentials = false,
-                Credentials = new NetworkCredential(senderEmail, senderPassword),
+                Credentials = new NetworkCredential(senderEmail.Trim(), senderPassword.Trim()),
                 EnableSsl = true,
                 DeliveryMethod = SmtpDeliveryMethod.Network,
-                Timeout = 30000
+                Timeout = 5000
             };
         }
 
