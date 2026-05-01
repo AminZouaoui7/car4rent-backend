@@ -26,6 +26,8 @@ namespace Car4rentpg.Services
 
             if (!int.TryParse(smtpPortRaw, out var smtpPort))
                 smtpPort = 587;
+            Console.WriteLine($"📨 CreateSmtpClient Host={smtpHost}, Port={smtpPort}, Sender={senderEmail}");
+
 
             return new SmtpClient(smtpHost, smtpPort)
             {
@@ -460,7 +462,14 @@ Notre équipe va vérifier la disponibilité du véhicule et reviendra vers vous
                 mail.To.Add(customerEmail);
 
                 Console.WriteLine("📨 Envoi SMTP en cours...");
+                Console.WriteLine($"📨 Host: {_configuration["EmailSettings:SmtpHost"]}");
+                Console.WriteLine($"📨 Port: {_configuration["EmailSettings:SmtpPort"]}");
+                Console.WriteLine($"📨 Sender: {senderEmail}");
+                Console.WriteLine($"📨 To: {customerEmail}");
+
                 await client.SendMailAsync(mail);
+
+                Console.WriteLine("✅ SMTP terminé sans erreur");
                 Console.WriteLine("✅ Email réservation envoyé avec succès.");
             }
             catch (Exception ex)
