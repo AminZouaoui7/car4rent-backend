@@ -306,10 +306,11 @@
 
             await _context.SaveChangesAsync();
 
+            Console.WriteLine("✅ Réservation sauvegardée en base.");
+            Console.WriteLine($"📧 Tentative envoi mail vers: {booking.Email}");
+
             try
             {
-                Console.WriteLine("📧 Début envoi email réservation...");
-
                 await _emailService.SendBookingPendingEmailAsync(
                     booking.Email,
                     $"{booking.FirstName} {booking.LastName}",
@@ -326,7 +327,7 @@
             }
             catch (Exception ex)
             {
-                Console.WriteLine("❌ ERREUR ENVOI EMAIL");
+                Console.WriteLine("❌ ERREUR EMAIL RÉSERVATION");
                 Console.WriteLine(ex.ToString());
             }
 
