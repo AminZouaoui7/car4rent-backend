@@ -38,8 +38,10 @@
             if (dto == null)
                 throw new Exception("Booking data is required.");
 
-            await ValidateCaptchaAsync(dto.CaptchaToken);
-            await CheckBookingAbuseAsync(dto);
+            // TEST TEMPORAIRE :
+            // On désactive captcha + anti-abus pour vérifier si le blocage vient de là.
+            // await ValidateCaptchaAsync(dto.CaptchaToken);
+            // await CheckBookingAbuseAsync(dto);
 
             var startDate = dto.StartDate.Date;
             var endDate = dto.EndDate.Date;
@@ -62,21 +64,6 @@
             if (!vehicle.Available)
                 throw new Exception("Vehicle is not available.");
 
-            if (dto.HasSecondDriver)
-            {
-                if (string.IsNullOrWhiteSpace(dto.SecondDriverFirstName))
-                    throw new Exception("Prénom deuxième conducteur obligatoire.");
-
-                if (string.IsNullOrWhiteSpace(dto.SecondDriverLastName))
-                    throw new Exception("Nom deuxième conducteur obligatoire.");
-
-                if (string.IsNullOrWhiteSpace(dto.SecondDriverPhone))
-                    throw new Exception("Téléphone deuxième conducteur obligatoire.");
-            }
-
-            if (dto.BoosterSeatQuantity < 0 || dto.BabySeatQuantity < 0 || dto.ChildSeatQuantity < 0)
-                throw new Exception("Les quantités des options ne peuvent pas être négatives.");
-
             var pickupCity = await _context.Cities
                 .FirstOrDefaultAsync(c => c.Id == dto.PickupCityId);
 
@@ -97,62 +84,10 @@
             var pricing = await _pricingService.CalculateAsync(vehicle, startDate, endDate);
             double basePrice = Math.Round(pricing.TotalPrice, 2);
 
-            double secondDriverAmount = dto.HasSecondDriver
-                ? Math.Round(totalDays * SecondDriverPricePerDay, 2)
-                : 0;
-
-            double gpsAmount = dto.HasGps
-                ? Math.Round(totalDays * GpsPricePerDay, 2)
-                : 0;
-
-            double fullTankAmount = dto.HasFullTank
-                ? Math.Round(FullTankFlatPrice, 2)
-                : 0;
-
-            double boosterSeatAmount = dto.BoosterSeatQuantity > 0
-                ? Math.Round(dto.BoosterSeatQuantity * totalDays * BoosterSeatPricePerDay, 2)
-                : 0;
-
-            double babySeatAmount = dto.BabySeatQuantity > 0
-                ? Math.Round(dto.BabySeatQuantity * totalDays * BabySeatPricePerDay, 2)
-                : 0;
-
-            double childSeatAmount = dto.ChildSeatQuantity > 0
-                ? Math.Round(dto.ChildSeatQuantity * totalDays * ChildSeatPricePerDay, 2)
-                : 0;
-
-            double protectionPlusAmount = dto.HasProtectionPlus
-                ? Math.Round(totalDays * ProtectionPlusPricePerDay, 2)
-                : 0;
-
-            double originalPrice = Math.Round(
-                basePrice
-                + secondDriverAmount
-                + gpsAmount
-                + fullTankAmount
-                + boosterSeatAmount
-                + babySeatAmount
-                + childSeatAmount
-                + protectionPlusAmount,
-                2
-            );
-
+            double originalPrice = basePrice;
             double discountAmount = 0;
             double totalPrice = originalPrice;
             string? promoCodeUsed = null;
-
-            if (!string.IsNullOrWhiteSpace(dto.PromoCode))
-            {
-                var promo = await GetValidPromoCodeAsync(dto.PromoCode);
-
-                discountAmount = Math.Round(originalPrice * (promo.DiscountPercentage / 100.0), 2);
-                totalPrice = Math.Round(originalPrice - discountAmount, 2);
-
-                if (totalPrice < 0)
-                    totalPrice = 0;
-
-                promoCodeUsed = promo.Code;
-            }
 
             double depositAmount = Math.Round(totalPrice * 0.10, 2);
 
@@ -173,30 +108,6 @@
 
                 VehicleId = dto.VehicleId,
                 TotalDays = totalDays,
-
-                HasSecondDriver = dto.HasSecondDriver,
-                SecondDriverFirstName = dto.HasSecondDriver ? dto.SecondDriverFirstName?.Trim() : null,
-                SecondDriverLastName = dto.HasSecondDriver ? dto.SecondDriverLastName?.Trim() : null,
-                SecondDriverPhone = dto.HasSecondDriver ? dto.SecondDriverPhone?.Trim() : null,
-                SecondDriverAmount = secondDriverAmount,
-
-                HasGps = dto.HasGps,
-                GpsAmount = gpsAmount,
-
-                HasFullTank = dto.HasFullTank,
-                FullTankAmount = fullTankAmount,
-
-                BoosterSeatQuantity = dto.BoosterSeatQuantity,
-                BoosterSeatAmount = boosterSeatAmount,
-
-                BabySeatQuantity = dto.BabySeatQuantity,
-                BabySeatAmount = babySeatAmount,
-
-                ChildSeatQuantity = dto.ChildSeatQuantity,
-                ChildSeatAmount = childSeatAmount,
-
-                HasProtectionPlus = dto.HasProtectionPlus,
-                ProtectionPlusAmount = protectionPlusAmount,
 
                 OriginalPrice = originalPrice,
                 DiscountAmount = discountAmount,
@@ -236,18 +147,7 @@
             _context.Bookings.Add(booking);
             _context.Payments.Add(depositPayment);
 
-            try
-            {
-                await _context.SaveChangesAsync();
-            }
-            catch (Exception ex)
-            {
-                throw new Exception(
-                    $"Erreur SaveChangesAsync: {ex.InnerException?.Message ?? ex.Message}"
-                );
-            }
-
-          
+            await _context.SaveChangesAsync();
 
             return booking;
         }
