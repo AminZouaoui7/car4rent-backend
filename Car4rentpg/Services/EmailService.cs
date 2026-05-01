@@ -26,8 +26,8 @@ namespace Car4rentpg.Services
 
             if (!int.TryParse(smtpPortRaw, out var smtpPort))
                 smtpPort = 587;
-            Console.WriteLine($"📨 CreateSmtpClient Host={smtpHost}, Port={smtpPort}, Sender={senderEmail}");
 
+            Console.WriteLine($"📨 SMTP CONFIG Host={smtpHost}, Port={smtpPort}, Sender={senderEmail}");
 
             return new SmtpClient(smtpHost, smtpPort)
             {
