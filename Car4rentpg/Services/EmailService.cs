@@ -16,24 +16,21 @@ namespace Car4rentpg.Services
 
         private SmtpClient CreateSmtpClient()
         {
-            var smtpHost = _configuration["EmailSettings:SmtpHost"];
-            var smtpPort = _configuration["EmailSettings:SmtpPort"];
+            var smtpHost = _configuration["EmailSettings:SmtpHost"] ?? "smtp.gmail.com";
+            var smtpPort = _configuration["EmailSettings:SmtpPort"] ?? "587";
             var senderEmail = _configuration["EmailSettings:SenderEmail"];
             var senderPassword = _configuration["EmailSettings:SenderPassword"];
 
-            if (string.IsNullOrWhiteSpace(smtpHost) ||
-                string.IsNullOrWhiteSpace(smtpPort) ||
-                string.IsNullOrWhiteSpace(senderEmail) ||
-                string.IsNullOrWhiteSpace(senderPassword))
-            {
-                throw new Exception("Email settings are missing in appsettings.json.");
-            }
+            if (string.IsNullOrWhiteSpace(senderEmail) || string.IsNullOrWhiteSpace(senderPassword))
+                throw new Exception("EmailSettings SenderEmail/SenderPassword manquants.");
 
             return new SmtpClient(smtpHost, int.Parse(smtpPort))
             {
+                UseDefaultCredentials = false,
                 Credentials = new NetworkCredential(senderEmail, senderPassword),
                 EnableSsl = true,
-                Timeout = 10000
+                DeliveryMethod = SmtpDeliveryMethod.Network,
+                Timeout = 30000
             };
         }
 
