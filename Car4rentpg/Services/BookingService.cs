@@ -309,7 +309,29 @@
             Console.WriteLine("✅ Réservation sauvegardée en base.");
             Console.WriteLine($"📧 Tentative envoi mail vers: {booking.Email}");
 
-            
+            try
+            {
+                Console.WriteLine("📨 AVANT appel EmailService");
+
+                await _emailService.SendBookingPendingEmailAsync(
+                    booking.Email,
+                    $"{booking.FirstName} {booking.LastName}",
+                    $"{vehicle.Brand} {vehicle.Model}",
+                    booking.StartDate,
+                    booking.EndDate,
+                    booking.TotalDays ?? 0,
+                    booking.TotalPrice ?? 0,
+                    pickupCity.Name,
+                    returnCity?.Name ?? pickupCity.Name
+                );
+
+                Console.WriteLine("✅ APRÈS appel EmailService");
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine("❌ ERREUR EMAIL CREATEBOOKING");
+                Console.WriteLine(ex.ToString());
+            }
 
             return booking;
         }
