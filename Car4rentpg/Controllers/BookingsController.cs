@@ -186,21 +186,31 @@
         [HttpGet("test-mail")]
         public async Task<IActionResult> TestMail([FromServices] EmailService emailService)
         {
-            await emailService.SendBookingPendingEmailAsync(
-                "aminmimou963@gmail.com",
-                "Test Client",
-                "BMW Test",
-                DateTime.UtcNow,
-                DateTime.UtcNow.AddDays(2),
-                2,
-                200,
-                "Tunis",
-                "Tunis"
-            );
+            try
+            {
+                await emailService.SendBookingPendingEmailAsync(
+                    "aminmimou963@gmail.com",
+                    "Test Client",
+                    "BMW Test",
+                    DateTime.UtcNow,
+                    DateTime.UtcNow.AddDays(2),
+                    2,
+                    200,
+                    "Tunis",
+                    "Tunis"
+                );
 
-            return Ok("Mail test envoyé");
+                return Ok("Mail envoyé");
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new
+                {
+                    message = ex.Message,
+                    detail = ex.ToString()
+                });
+            }
         }
-
         // ===============================
         // ADMIN - MARK FULLY PAID
         // ===============================
