@@ -183,10 +183,28 @@
                 }
             }
 
-            // ===============================
-            // ADMIN - MARK FULLY PAID
-            // ===============================
-            [Authorize(Roles = "Admin")]
+        [HttpGet("test-mail")]
+        public async Task<IActionResult> TestMail([FromServices] EmailService emailService)
+        {
+            await emailService.SendBookingPendingEmailAsync(
+                "aminmimou963@gmail.com",
+                "Test Client",
+                "BMW Test",
+                DateTime.UtcNow,
+                DateTime.UtcNow.AddDays(2),
+                2,
+                200,
+                "Tunis",
+                "Tunis"
+            );
+
+            return Ok("Mail test envoyé");
+        }
+
+        // ===============================
+        // ADMIN - MARK FULLY PAID
+        // ===============================
+        [Authorize(Roles = "Admin")]
             [HttpPut("{id}/mark-fully-paid")]
             public async Task<IActionResult> MarkFullyPaid(string id)
             {
@@ -213,3 +231,4 @@
             }
         }
     }
+
