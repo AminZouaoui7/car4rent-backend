@@ -35,7 +35,7 @@ namespace Car4rentpg.Services
                 Credentials = new NetworkCredential(senderEmail.Trim(), senderPassword.Trim()),
                 EnableSsl = true,
                 DeliveryMethod = SmtpDeliveryMethod.Network,
-                Timeout = 5000
+                Timeout = 15000
             };
         }
 

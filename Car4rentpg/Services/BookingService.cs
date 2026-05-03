@@ -313,17 +313,30 @@
             {
                 Console.WriteLine("📨 AVANT appel EmailService");
 
-                await _emailService.SendBookingPendingEmailAsync(
-                    booking.Email,
-                    $"{booking.FirstName} {booking.LastName}",
-                    $"{vehicle.Brand} {vehicle.Model}",
-                    booking.StartDate,
-                    booking.EndDate,
-                    booking.TotalDays ?? 0,
-                    booking.TotalPrice ?? 0,
-                    pickupCity.Name,
-                    returnCity?.Name ?? pickupCity.Name
-                );
+                _ = Task.Run(async () =>
+                {
+                    try
+                    {
+                        await _emailService.SendBookingPendingEmailAsync(
+                            booking.Email,
+                            $"{booking.FirstName} {booking.LastName}",
+                            $"{vehicle.Brand} {vehicle.Model}",
+                            booking.StartDate,
+                            booking.EndDate,
+                            booking.TotalDays ?? 0,
+                            booking.TotalPrice ?? 0,
+                            pickupCity.Name,
+                            returnCity?.Name ?? pickupCity.Name
+                        );
+
+                        Console.WriteLine("✅ Email envoyé en arrière-plan.");
+                    }
+                    catch (Exception ex)
+                    {
+                        Console.WriteLine("❌ ERREUR EMAIL ARRIÈRE-PLAN");
+                        Console.WriteLine(ex.ToString());
+                    }
+                });
 
                 Console.WriteLine("✅ APRÈS appel EmailService");
             }
