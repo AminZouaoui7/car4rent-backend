@@ -1,7 +1,8 @@
 ﻿using System.Globalization;
 using System.Net;
-using System.Net.Mail;
+using System.Net.Http.Headers;
 using System.Text;
+using System.Text.Json;
 
 namespace Car4rentpg.Services
 {
@@ -14,41 +15,65 @@ namespace Car4rentpg.Services
             _configuration = configuration;
         }
 
-        private SmtpClient CreateSmtpClient()
+        private async Task SendBrevoEmailAsync(
+            string toEmail,
+            string toName,
+            string subject,
+            string htmlBody)
         {
-            var smtpHost = _configuration["EmailSettings:SmtpHost"] ?? "smtp.gmail.com";
-            var smtpPortRaw = _configuration["EmailSettings:SmtpPort"] ?? "587";
-            var senderEmail = _configuration["EmailSettings:SenderEmail"];
-            var senderPassword = _configuration["EmailSettings:SenderPassword"];
+            var apiKey = _configuration["Brevo:ApiKey"];
+            var senderEmail = _configuration["Brevo:SenderEmail"];
+            var senderName = _configuration["Brevo:SenderName"] ?? "Car4Rent";
 
-            if (string.IsNullOrWhiteSpace(senderEmail) || string.IsNullOrWhiteSpace(senderPassword))
-                throw new Exception("EmailSettings SenderEmail/SenderPassword manquants.");
-
-            if (!int.TryParse(smtpPortRaw, out var smtpPort))
-                smtpPort = 587;
-
-            Console.WriteLine($"📨 SMTP CONFIG Host={smtpHost}, Port={smtpPort}, Sender={senderEmail}");
-
-            return new SmtpClient(smtpHost, smtpPort)
-            {
-                UseDefaultCredentials = false,
-                Credentials = new NetworkCredential(senderEmail.Trim(), senderPassword.Trim().Replace(" ", "")),
-                EnableSsl = true,
-                DeliveryMethod = SmtpDeliveryMethod.Network,
-                Timeout = 10000
-            };
-        }
-
-        private string GetSenderEmail()
-        {
-            var senderEmail = _configuration["EmailSettings:SenderEmail"];
+            if (string.IsNullOrWhiteSpace(apiKey))
+                throw new Exception("Brevo ApiKey manquante.");
 
             if (string.IsNullOrWhiteSpace(senderEmail))
+                throw new Exception("Brevo SenderEmail manquant.");
+
+            using var http = new HttpClient();
+
+            http.DefaultRequestHeaders.Accept.Add(
+                new MediaTypeWithQualityHeaderValue("application/json")
+            );
+
+            http.DefaultRequestHeaders.Add("api-key", apiKey);
+
+            var payload = new
             {
-                throw new Exception("SenderEmail is missing in appsettings.json.");
+                sender = new
+                {
+                    name = senderName,
+                    email = senderEmail
+                },
+                to = new[]
+                {
+                    new
+                    {
+                        email = toEmail,
+                        name = toName
+                    }
+                },
+                subject = subject,
+                htmlContent = htmlBody
+            };
+
+            var json = JsonSerializer.Serialize(payload);
+            using var content = new StringContent(json, Encoding.UTF8, "application/json");
+
+            var response = await http.PostAsync(
+                "https://api.brevo.com/v3/smtp/email",
+                content
+            );
+
+            var responseBody = await response.Content.ReadAsStringAsync();
+
+            if (!response.IsSuccessStatusCode)
+            {
+                throw new Exception($"Erreur Brevo: {(int)response.StatusCode} - {responseBody}");
             }
 
-            return senderEmail;
+            Console.WriteLine("✅ Email envoyé via Brevo API.");
         }
 
         private static string E(string? value)
@@ -72,11 +97,11 @@ namespace Car4rentpg.Services
         }
 
         private string BuildEmailLayout(
-            string title,
-            string subtitle,
-            string statusLabel,
-            string accentColor,
-            string contentHtml)
+    string title,
+    string subtitle,
+    string statusLabel,
+    string accentColor,
+    string contentHtml)
         {
             var logoUrl = _configuration["AppSettings:LogoUrl"]
                           ?? "https://via.placeholder.com/180x60?text=Car4Rent";
@@ -151,7 +176,6 @@ namespace Car4rentpg.Services
 </body>
 </html>";
         }
-
         private string BuildInfoTable(string title, params (string Label, string Value)[] rows)
         {
             var sb = new StringBuilder();
@@ -182,7 +206,6 @@ namespace Car4rentpg.Services
             }
 
             sb.Append("</table>");
-
             return sb.ToString();
         }
 
@@ -296,16 +319,15 @@ namespace Car4rentpg.Services
     </div>
 </div>";
         }
-
         private string BuildReservationDetailsHtml(
-            string customerFullName,
-            string vehicleName,
-            DateTime startDate,
-            DateTime endDate,
-            int? totalDays,
-            double? totalPrice,
-            string pickupCity,
-            string returnCity)
+    string customerFullName,
+    string vehicleName,
+    DateTime startDate,
+    DateTime endDate,
+    int? totalDays,
+    double? totalPrice,
+    string pickupCity,
+    string returnCity)
         {
             return $@"
 {BuildSimpleTextBlock($@"
@@ -395,89 +417,55 @@ Merci pour votre demande de transfert. Voici le récapitulatif complet de votre 
     ("Nombre de bagages", luggageCount.ToString())
 )}";
         }
-
         public async Task SendBookingPendingEmailAsync(
-      string customerEmail,
-      string customerFullName,
-      string vehicleName,
-      DateTime startDate,
-      DateTime endDate,
-      int totalDays,
-      double totalPrice,
-      string pickupCity,
-      string returnCity)
+    string customerEmail,
+    string customerFullName,
+    string vehicleName,
+    DateTime startDate,
+    DateTime endDate,
+    int totalDays,
+    double totalPrice,
+    string pickupCity,
+    string returnCity)
         {
-            Console.WriteLine("📨 SendBookingPendingEmailAsync appelée.");
-            Console.WriteLine($"📨 Destinataire: {customerEmail}");
+            var details = BuildReservationDetailsHtml(
+                customerFullName,
+                vehicleName,
+                startDate,
+                endDate,
+                totalDays,
+                totalPrice,
+                pickupCity,
+                returnCity
+            );
 
-            try
-            {
-                using var client = CreateSmtpClient();
-                var senderEmail = GetSenderEmail();
-
-                Console.WriteLine($"📨 SMTP prêt. Sender: {senderEmail}");
-
-                var details = BuildReservationDetailsHtml(
-                    customerFullName,
-                    vehicleName,
-                    startDate,
-                    endDate,
-                    totalDays,
-                    totalPrice,
-                    pickupCity,
-                    returnCity
-                );
-
-                var statusBox = BuildStatusBox(
-                    "#fff8e8",
-                    "#fde7b0",
-                    "#7c5a00",
-                    "Demande en attente",
-                    @"
+            var statusBox = BuildStatusBox(
+                "#fff8e8",
+                "#fde7b0",
+                "#7c5a00",
+                "Demande en attente",
+                @"
 <p style='margin:0;'>
 Votre demande de réservation a bien été reçue et elle est actuellement <strong>en attente de validation</strong>.
 <br/><br/>
 Notre équipe va vérifier la disponibilité du véhicule et reviendra vers vous dans les plus brefs délais.
 </p>"
-                );
+            );
 
-                var htmlBody = BuildEmailLayout(
-                    "Demande de réservation reçue",
-                    "Votre demande a bien été enregistrée par notre équipe.",
-                    "Réservation en attente",
-                    "#c28a00",
-                    details + statusBox + BuildRentalConditionsBlock() + BuildContactBlock()
-                );
+            var htmlBody = BuildEmailLayout(
+                "Demande de réservation reçue",
+                "Votre demande a bien été enregistrée par notre équipe.",
+                "Réservation en attente",
+                "#c28a00",
+                details + statusBox + BuildRentalConditionsBlock() + BuildContactBlock()
+            );
 
-                using var mail = new MailMessage
-                {
-                    From = new MailAddress(senderEmail, "Car4Rent"),
-                    Subject = "Confirmation de votre demande de réservation",
-                    Body = htmlBody,
-                    IsBodyHtml = true,
-                    BodyEncoding = Encoding.UTF8,
-                    SubjectEncoding = Encoding.UTF8
-                };
-
-                mail.To.Add(customerEmail);
-
-                Console.WriteLine("📨 Envoi SMTP en cours...");
-                Console.WriteLine($"📨 Host: {_configuration["EmailSettings:SmtpHost"]}");
-                Console.WriteLine($"📨 Port: {_configuration["EmailSettings:SmtpPort"]}");
-                Console.WriteLine($"📨 Sender: {senderEmail}");
-                Console.WriteLine($"📨 To: {customerEmail}");
-
-                await client.SendMailAsync(mail);
-
-                Console.WriteLine("✅ SMTP terminé sans erreur");
-                Console.WriteLine("✅ Email réservation envoyé avec succès.");
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine("❌ ERREUR SendBookingPendingEmailAsync");
-                Console.WriteLine(ex.ToString());
-                throw;
-            }
+            await SendBrevoEmailAsync(
+                customerEmail,
+                customerFullName,
+                "Confirmation de votre demande de réservation",
+                htmlBody
+            );
         }
 
         public async Task SendBookingConfirmedEmailAsync(
@@ -492,47 +480,39 @@ Notre équipe va vérifier la disponibilité du véhicule et reviendra vers vous
             string pickupCity,
             string returnCity)
         {
-            Console.WriteLine("📨 SendBookingConfirmedEmailAsync appelée.");
-            Console.WriteLine($"📨 Destinataire: {customerEmail}");
+            double depositAmount = Math.Round((totalPrice ?? 0) * 0.10, 2);
 
-            try
-            {
-                using var client = CreateSmtpClient();
-                var senderEmail = GetSenderEmail();
+            var frontendBaseUrl = (_configuration["AppSettings:FrontendBaseUrl"] ?? "http://localhost:5173").TrimEnd('/');
+            var paymentPagePath = _configuration["AppSettings:PaymentPagePath"] ?? "/payment";
 
-                double depositAmount = Math.Round((totalPrice ?? 0) * 0.10, 2);
+            if (!paymentPagePath.StartsWith("/"))
+                paymentPagePath = "/" + paymentPagePath;
 
-                var frontendBaseUrl = (_configuration["AppSettings:FrontendBaseUrl"] ?? "http://localhost:5173").TrimEnd('/');
-                var paymentPagePath = _configuration["AppSettings:PaymentPagePath"] ?? "/payment";
+            var paymentUrl =
+                $"{frontendBaseUrl}{paymentPagePath}" +
+                $"?bookingId={Uri.EscapeDataString(bookingId)}" +
+                $"&email={Uri.EscapeDataString(customerEmail)}" +
+                $"&name={Uri.EscapeDataString(customerFullName)}" +
+                $"&vehicle={Uri.EscapeDataString(vehicleName)}" +
+                $"&amount={depositAmount.ToString(CultureInfo.InvariantCulture)}";
 
-                if (!paymentPagePath.StartsWith("/"))
-                    paymentPagePath = "/" + paymentPagePath;
+            var details = BuildReservationDetailsHtml(
+                customerFullName,
+                vehicleName,
+                startDate,
+                endDate,
+                totalDays,
+                totalPrice,
+                pickupCity,
+                returnCity
+            );
 
-                var paymentUrl =
-                    $"{frontendBaseUrl}{paymentPagePath}" +
-                    $"?bookingId={Uri.EscapeDataString(bookingId)}" +
-                    $"&email={Uri.EscapeDataString(customerEmail)}" +
-                    $"&name={Uri.EscapeDataString(customerFullName)}" +
-                    $"&vehicle={Uri.EscapeDataString(vehicleName)}" +
-                    $"&amount={depositAmount.ToString(CultureInfo.InvariantCulture)}";
-
-                var details = BuildReservationDetailsHtml(
-                    customerFullName,
-                    vehicleName,
-                    startDate,
-                    endDate,
-                    totalDays,
-                    totalPrice,
-                    pickupCity,
-                    returnCity
-                );
-
-                var confirmationText = BuildStatusBox(
-                    "#eef5ff",
-                    "#cfe0f5",
-                    "#062a4b",
-                    "Réservation confirmée",
-                    $@"
+            var confirmationText = BuildStatusBox(
+                "#eef5ff",
+                "#cfe0f5",
+                "#062a4b",
+                "Réservation confirmée",
+                $@"
 <p style='margin:0;'>
 Nous avons le plaisir de répondre positivement à votre demande.
 <br/><br/>
@@ -541,57 +521,38 @@ La location de <strong>{E(vehicleName)}</strong> pour la période du
 correspond à <strong>{(totalDays ?? 0)} jours</strong> pour un montant total de
 <strong>{FormatMoney(totalPrice)}</strong>, sous réserve de disponibilité finale du véhicule.
 </p>"
-                );
+            );
 
-                var paymentBox = BuildPaymentSummaryBox(depositAmount, totalPrice);
-                var button = BuildPrimaryButton(paymentUrl, "Procéder au paiement");
+            var paymentBox = BuildPaymentSummaryBox(depositAmount, totalPrice);
+            var button = BuildPrimaryButton(paymentUrl, "Procéder au paiement");
 
-                var htmlBody = BuildEmailLayout(
-                    "Votre réservation est confirmée",
-                    "Pour finaliser votre réservation, merci de régler l’acompte demandé.",
-                    "Réservation confirmée",
-                    "#0f7b4b",
-                    details + confirmationText + paymentBox + button + BuildRentalConditionsBlock() + BuildContactBlock()
-                );
+            var htmlBody = BuildEmailLayout(
+                "Votre réservation est confirmée",
+                "Pour finaliser votre réservation, merci de régler l’acompte demandé.",
+                "Réservation confirmée",
+                "#0f7b4b",
+                details + confirmationText + paymentBox + button + BuildRentalConditionsBlock() + BuildContactBlock()
+            );
 
-                using var mail = new MailMessage
-                {
-                    From = new MailAddress(senderEmail, "Car4Rent"),
-                    Subject = "Réservation confirmée - Paiement requis",
-                    Body = htmlBody,
-                    IsBodyHtml = true,
-                    BodyEncoding = Encoding.UTF8,
-                    SubjectEncoding = Encoding.UTF8
-                };
-
-                mail.To.Add(customerEmail);
-
-                Console.WriteLine("📨 Envoi SMTP confirmation en cours...");
-                await client.SendMailAsync(mail);
-                Console.WriteLine("✅ Email confirmation envoyé avec succès.");
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine("❌ ERREUR SendBookingConfirmedEmailAsync");
-                Console.WriteLine(ex.ToString());
-                throw;
-            }
+            await SendBrevoEmailAsync(
+                customerEmail,
+                customerFullName,
+                "Réservation confirmée - Paiement requis",
+                htmlBody
+            );
         }
 
         public async Task SendBookingCancelledEmailAsync(
-            string customerEmail,
-            string customerFullName,
-            string vehicleName,
-            DateTime startDate,
-            DateTime endDate,
-            int? totalDays,
-            double? totalPrice,
-            string pickupCity,
-            string returnCity)
+    string customerEmail,
+    string customerFullName,
+    string vehicleName,
+    DateTime startDate,
+    DateTime endDate,
+    int? totalDays,
+    double? totalPrice,
+    string pickupCity,
+    string returnCity)
         {
-            using var client = CreateSmtpClient();
-            var senderEmail = GetSenderEmail();
-
             var details = BuildReservationDetailsHtml(
                 customerFullName,
                 vehicleName,
@@ -625,18 +586,12 @@ Notre équipe reste à votre disposition pour vous proposer une autre solution.
                 details + statusBox + BuildContactBlock()
             );
 
-            var mail = new MailMessage
-            {
-                From = new MailAddress(senderEmail, "Car4Rent"),
-                Subject = "Votre réservation n’a pas été retenue",
-                Body = htmlBody,
-                IsBodyHtml = true,
-                BodyEncoding = Encoding.UTF8,
-                SubjectEncoding = Encoding.UTF8
-            };
-
-            mail.To.Add(customerEmail);
-            await client.SendMailAsync(mail);
+            await SendBrevoEmailAsync(
+                customerEmail,
+                customerFullName,
+                "Votre réservation n’a pas été retenue",
+                htmlBody
+            );
         }
 
         public async Task SendDepositPaidEmailAsync(
@@ -644,9 +599,6 @@ Notre équipe reste à votre disposition pour vous proposer une autre solution.
             string customerFullName,
             double depositAmount)
         {
-            using var client = CreateSmtpClient();
-            var senderEmail = GetSenderEmail();
-
             var statusBox = BuildStatusBox(
                 "#eefbf3",
                 "#cdeedd",
@@ -669,18 +621,12 @@ Votre réservation est maintenant sécurisée et enregistrée par notre équipe.
                 statusBox + BuildContactBlock()
             );
 
-            var mail = new MailMessage
-            {
-                From = new MailAddress(senderEmail, "Car4Rent"),
-                Subject = "Confirmation de réception de votre acompte",
-                Body = htmlBody,
-                IsBodyHtml = true,
-                BodyEncoding = Encoding.UTF8,
-                SubjectEncoding = Encoding.UTF8
-            };
-
-            mail.To.Add(customerEmail);
-            await client.SendMailAsync(mail);
+            await SendBrevoEmailAsync(
+                customerEmail,
+                customerFullName,
+                "Confirmation de réception de votre acompte",
+                htmlBody
+            );
         }
 
         public async Task SendFullyPaidEmailAsync(
@@ -688,9 +634,6 @@ Votre réservation est maintenant sécurisée et enregistrée par notre équipe.
             string customerFullName,
             double totalPrice)
         {
-            using var client = CreateSmtpClient();
-            var senderEmail = GetSenderEmail();
-
             var statusBox = BuildStatusBox(
                 "#eef5ff",
                 "#cfe0f5",
@@ -713,32 +656,22 @@ Le montant total enregistré est de <strong>{totalPrice:F2} €</strong>.
                 statusBox + BuildContactBlock()
             );
 
-            var mail = new MailMessage
-            {
-                From = new MailAddress(senderEmail, "Car4Rent"),
-                Subject = "Paiement total confirmé",
-                Body = htmlBody,
-                IsBodyHtml = true,
-                BodyEncoding = Encoding.UTF8,
-                SubjectEncoding = Encoding.UTF8
-            };
-
-            mail.To.Add(customerEmail);
-            await client.SendMailAsync(mail);
+            await SendBrevoEmailAsync(
+                customerEmail,
+                customerFullName,
+                "Paiement total confirmé",
+                htmlBody
+            );
         }
-
         public async Task SendLongTermRentalPendingEmailAsync(
-            string customerEmail,
-            string customerFullName,
-            DateTime startDate,
-            int durationMonths,
-            string pickupCity,
-            string? vehicleName,
-            string? notes)
+    string customerEmail,
+    string customerFullName,
+    DateTime startDate,
+    int durationMonths,
+    string pickupCity,
+    string? vehicleName,
+    string? notes)
         {
-            using var client = CreateSmtpClient();
-            var senderEmail = GetSenderEmail();
-
             var details = BuildLongTermDetailsHtml(
                 customerFullName,
                 startDate,
@@ -770,18 +703,12 @@ Notre équipe étudie actuellement votre dossier et reviendra vers vous avec une
                 details + statusBox + BuildContactBlock()
             );
 
-            var mail = new MailMessage
-            {
-                From = new MailAddress(senderEmail, "Car4Rent"),
-                Subject = "Confirmation de votre demande longue durée",
-                Body = htmlBody,
-                IsBodyHtml = true,
-                BodyEncoding = Encoding.UTF8,
-                SubjectEncoding = Encoding.UTF8
-            };
-
-            mail.To.Add(customerEmail);
-            await client.SendMailAsync(mail);
+            await SendBrevoEmailAsync(
+                customerEmail,
+                customerFullName,
+                "Confirmation de votre demande longue durée",
+                htmlBody
+            );
         }
 
         public async Task SendLongTermRentalQuoteEmailAsync(
@@ -794,9 +721,6 @@ Notre équipe étudie actuellement votre dossier et reviendra vers vous avec une
             decimal? monthlyPrice,
             decimal? totalPrice)
         {
-            using var client = CreateSmtpClient();
-            var senderEmail = GetSenderEmail();
-
             var details = BuildLongTermDetailsHtml(
                 customerFullName,
                 startDate,
@@ -830,18 +754,12 @@ Vous pouvez nous contacter pour confirmer les détails.
                 details + statusBox + BuildContactBlock()
             );
 
-            var mail = new MailMessage
-            {
-                From = new MailAddress(senderEmail, "Car4Rent"),
-                Subject = "Votre devis de location longue durée",
-                Body = htmlBody,
-                IsBodyHtml = true,
-                BodyEncoding = Encoding.UTF8,
-                SubjectEncoding = Encoding.UTF8
-            };
-
-            mail.To.Add(customerEmail);
-            await client.SendMailAsync(mail);
+            await SendBrevoEmailAsync(
+                customerEmail,
+                customerFullName,
+                "Votre devis de location longue durée",
+                htmlBody
+            );
         }
         public async Task SendLongTermRentalApprovedEmailAsync(
     string customerEmail,
@@ -853,9 +771,6 @@ Vous pouvez nous contacter pour confirmer les détails.
     decimal? monthlyPrice,
     decimal? totalPrice)
         {
-            using var client = CreateSmtpClient();
-            var senderEmail = GetSenderEmail();
-
             var details = BuildLongTermDetailsHtml(
                 customerFullName,
                 startDate,
@@ -889,18 +804,12 @@ Merci de nous contacter afin de finaliser l’organisation et les derniers déta
                 details + statusBox + BuildContactBlock()
             );
 
-            var mail = new MailMessage
-            {
-                From = new MailAddress(senderEmail, "Car4Rent"),
-                Subject = "Votre demande longue durée a été approuvée",
-                Body = htmlBody,
-                IsBodyHtml = true,
-                BodyEncoding = Encoding.UTF8,
-                SubjectEncoding = Encoding.UTF8
-            };
-
-            mail.To.Add(customerEmail);
-            await client.SendMailAsync(mail);
+            await SendBrevoEmailAsync(
+                customerEmail,
+                customerFullName,
+                "Votre demande longue durée a été approuvée",
+                htmlBody
+            );
         }
 
         public async Task SendLongTermRentalRejectedEmailAsync(
@@ -911,9 +820,6 @@ Merci de nous contacter afin de finaliser l’organisation et les derniers déta
             string pickupCity,
             string? vehicleName)
         {
-            using var client = CreateSmtpClient();
-            var senderEmail = GetSenderEmail();
-
             var details = BuildLongTermDetailsHtml(
                 customerFullName,
                 startDate,
@@ -945,34 +851,24 @@ Notre équipe reste disponible pour étudier une autre formule avec vous.
                 details + statusBox + BuildContactBlock()
             );
 
-            var mail = new MailMessage
-            {
-                From = new MailAddress(senderEmail, "Car4Rent"),
-                Subject = "Votre demande longue durée n’a pas été retenue",
-                Body = htmlBody,
-                IsBodyHtml = true,
-                BodyEncoding = Encoding.UTF8,
-                SubjectEncoding = Encoding.UTF8
-            };
-
-            mail.To.Add(customerEmail);
-            await client.SendMailAsync(mail);
+            await SendBrevoEmailAsync(
+                customerEmail,
+                customerFullName,
+                "Votre demande longue durée n’a pas été retenue",
+                htmlBody
+            );
         }
-
         public async Task SendTransferPendingEmailAsync(
-            string customerEmail,
-            string customerFullName,
-            string pickupAirport,
-            string dropoffCity,
-            string hotelName,
-            string? hotelAddress,
-            DateTime transferDate,
-            int passengers,
-            int luggageCount)
+    string customerEmail,
+    string customerFullName,
+    string pickupAirport,
+    string dropoffCity,
+    string hotelName,
+    string? hotelAddress,
+    DateTime transferDate,
+    int passengers,
+    int luggageCount)
         {
-            using var client = CreateSmtpClient();
-            var senderEmail = GetSenderEmail();
-
             var details = BuildTransferDetailsHtml(
                 customerFullName,
                 pickupAirport,
@@ -1004,18 +900,12 @@ Notre équipe vérifie l’organisation et vous enverra une confirmation dans le
                 details + statusBox + BuildContactBlock()
             );
 
-            var mail = new MailMessage
-            {
-                From = new MailAddress(senderEmail, "Car4Rent"),
-                Subject = "Confirmation de votre demande de transfert",
-                Body = htmlBody,
-                IsBodyHtml = true,
-                BodyEncoding = Encoding.UTF8,
-                SubjectEncoding = Encoding.UTF8
-            };
-
-            mail.To.Add(customerEmail);
-            await client.SendMailAsync(mail);
+            await SendBrevoEmailAsync(
+                customerEmail,
+                customerFullName,
+                "Confirmation de votre demande de transfert",
+                htmlBody
+            );
         }
 
         public async Task SendTransferConfirmedEmailAsync(
@@ -1029,9 +919,6 @@ Notre équipe vérifie l’organisation et vous enverra une confirmation dans le
             int passengers,
             int luggageCount)
         {
-            using var client = CreateSmtpClient();
-            var senderEmail = GetSenderEmail();
-
             var details = BuildTransferDetailsHtml(
                 customerFullName,
                 pickupAirport,
@@ -1063,18 +950,12 @@ Notre équipe vous prendra en charge selon les informations transmises.
                 details + statusBox + BuildContactBlock()
             );
 
-            var mail = new MailMessage
-            {
-                From = new MailAddress(senderEmail, "Car4Rent"),
-                Subject = "Votre transfert a été confirmé",
-                Body = htmlBody,
-                IsBodyHtml = true,
-                BodyEncoding = Encoding.UTF8,
-                SubjectEncoding = Encoding.UTF8
-            };
-
-            mail.To.Add(customerEmail);
-            await client.SendMailAsync(mail);
+            await SendBrevoEmailAsync(
+                customerEmail,
+                customerFullName,
+                "Votre transfert a été confirmé",
+                htmlBody
+            );
         }
 
         public async Task SendTransferCancelledEmailAsync(
@@ -1088,9 +969,6 @@ Notre équipe vous prendra en charge selon les informations transmises.
             int passengers,
             int luggageCount)
         {
-            using var client = CreateSmtpClient();
-            var senderEmail = GetSenderEmail();
-
             var details = BuildTransferDetailsHtml(
                 customerFullName,
                 pickupAirport,
@@ -1122,18 +1000,12 @@ N’hésitez pas à nous contacter pour une autre proposition.
                 details + statusBox + BuildContactBlock()
             );
 
-            var mail = new MailMessage
-            {
-                From = new MailAddress(senderEmail, "Car4Rent"),
-                Subject = "Votre demande de transfert n’a pas été retenue",
-                Body = htmlBody,
-                IsBodyHtml = true,
-                BodyEncoding = Encoding.UTF8,
-                SubjectEncoding = Encoding.UTF8
-            };
-
-            mail.To.Add(customerEmail);
-            await client.SendMailAsync(mail);
+            await SendBrevoEmailAsync(
+                customerEmail,
+                customerFullName,
+                "Votre demande de transfert n’a pas été retenue",
+                htmlBody
+            );
         }
     }
 }
